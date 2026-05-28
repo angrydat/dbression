@@ -1,0 +1,16 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Oracle InstantClient (lokal, optional, ~90MB) — Pfad bei Bedarf via
+# DBTEST_ORACLE_CLIENT_LIB_DIR an OracleAdapter weitergegeben.
+.instantclient/
+.idea/
+dist/
