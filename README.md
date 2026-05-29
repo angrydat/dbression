@@ -6,9 +6,8 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 
 Modern, lightweight database regression testing — read your existing DBFit wikis, run them
-anywhere. `dbression` is a Python re-implementation of [DBFit](https://dbfit.github.io/dbfit/):
-**your `.wiki` suites stay, the Java runtime, the FitNesse server, and the 80 MB Oracle
-InstantClient are gone.** Multi-DB from day one, pytest-style CLI, JUnit XML for every CI.
+anywhere. `dbression` is a Python re-implementation in the spirit of the fantastic [DBFit](https://dbfit.github.io/dbfit/) Framework:
+**your `.wiki` suites stay, the Java runtime, the bulky FitNesse server, and the Browser based Wiki pages are gone.** Multi-DB, pytest-style CLI, JUnit XML and JSON for CI as well as a developer and agentic friendly STDOUT.
 
 ```text
 $ dbression run tests/
@@ -248,7 +247,7 @@ dbression version
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  CLI (typer)        dbression run tests/  [--flags]        │
+│  CLI (typer)        dbression run tests/  [--flags]     │
 └─────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -281,19 +280,19 @@ dbression version
 `dbression` is **WIP but already useful** — running production-scale DBFit suites today against
 PostgreSQL. Honest state of the parts:
 
-| Component | Status |
-|---|---|
-| Wiki parser (DBFit subset) | ✅ tested against real-world suites with 89+ files |
-| Fixtures (Query, Execute, Insert, Delete, Set Parameter, Execute Procedure, Inspect *, Store/Compare Query) | ✅ |
-| PostgreSQL | ✅ live-verified against a production-scale suite |
-| SQL Server | 🟡 code-complete via `pymssql`, awaiting live verification on a real suite |
-| Oracle | 🟡 code-complete via `oracledb`; one known auth-mode issue we're tracking |
-| JUnit XML + JSON output | ✅ |
-| `Update` fixture | ⏳ stubbed — pull request welcome |
-| `.test.md` native Markdown format + `dbression convert` | ✅ |
-| Plugin entry-points for custom fixtures | ✅ |
+| Component | Status                                   |
+|---|------------------------------------------|
+| Wiki parser (DBFit subset) | ✅ verified                               |
+| Fixtures (Query, Execute, Insert, Delete, Set Parameter, Execute Procedure, Inspect *, Store/Compare Query) | ✅                                        |
+| PostgreSQL | ✅ verified                               |
+| SQL Server | 🟡 code-complete via `pymssql`, testing  |
+| Oracle | 🟡 code-complete via `oracledb`; testing |
+| JUnit XML + JSON output | ✅                                        |
+| `Update` fixture | ⏳ stubbed — pull request welcome         |
+| `.test.md` native Markdown format + `dbression convert` | ✅                                        |
+| Plugin entry-points for custom fixtures | ✅                                        |
 
-We don't promise perfect compatibility with every obscure DBFit feature. We promise
+Don't expect perfect compatibility with every obscure DBFit feature. We promise
 **the subset real teams actually use**, with a sharper UX and a tenth of the footprint.
 
 ## Contributing

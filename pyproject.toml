@@ -5,7 +5,7 @@ description = "Rage-quit your flaky DB regressions — modern, lightweight, mult
 readme = "README.md"
 license = { text = "MIT" }
 authors = [
-    { name = "Jürgen Zornig", email = "juergen.zornig@gmail.com" }
+    { name = "Jürgen Zornig", email = "info@angrydata.info" }
 ]
 requires-python = ">=3.12"
 keywords = [
@@ -48,10 +48,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/angrydata/dbression"
-Repository = "https://github.com/angrydata/dbression"
-Issues = "https://github.com/angrydata/dbression/issues"
-Changelog = "https://github.com/angrydata/dbression/blob/main/CHANGELOG.md"
+Homepage = "https://angrydata.info/dbression"
+Repository = "https://github.com/angrydat/dbression"
+Issues = "https://github.com/angrydat/dbression/issues"
+Changelog = "https://github.com/angrydat/dbression/blob/main/CHANGELOG.md"
 
 [project.scripts]
 dbression = "dbression.cli:main"
