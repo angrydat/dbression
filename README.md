@@ -55,11 +55,15 @@ the model gets every detail it needs to suggest a fix, no screenshots, no contex
 
 ```bash
 # install (we use uv, but pip works too)
-uv tool install git+https://github.com/<your-org>/dbression.git
+uv tool install git+https://github.com/angrydat/dbression.git
 
 # run
 dbression run tests/
 ```
+
+There's also an [`examples/`](examples/) folder with three runnable demo suites
+(hello-SQL, stored-procedure-with-capture, schema-drift via `Inspect Table`) — each
+file is browsable Markdown *and* an executable test.
 
 ### Your first test
 

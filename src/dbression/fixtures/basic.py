@@ -141,18 +141,84 @@ class SetParameter(Fixture):
 
 @register("Update")
 class Update(Fixture):
-    """Update fixture — Phase-1 stub.
+    """``!|Update|<schema.table>|`` with column headers and data rows.
 
-    DBFit's convention here is complex (WHERE columns appended at the end of the row,
-    marked via `=` column headers). WLK uses no Update fixtures and KBGSuite only once —
-    implementation deferred until a concrete example exists.
+    Convention (DBFit-compatible):
+
+    * Headers ending in ``=`` mark **WHERE columns** (the row's value is used in the WHERE clause).
+    * All other headers are **SET columns** (assigned to the new value).
+
+    Data-cell substitution: ``<<sym`` reads from the symbol table, empty / ``null`` becomes NULL.
+    Each data row issues one ``UPDATE`` statement. NULL on a WHERE column generates ``IS NULL``
+    (rather than ``= NULL`` which never matches).
+
+    Example::
+
+        !|Update|wlk.app_selectset|
+        |selected|oid=|table_name=|
+        |true    |42  |WB         |
+
+    runs ``UPDATE wlk.app_selectset SET selected = :v_0 WHERE oid = :v_1 AND table_name = :v_2``.
     """
 
     def run(self, table: Table, ctx: FixtureContext) -> FixtureResult:
-        return FixtureResult(
-            passed=False,
-            message="Update fixture not implemented yet (Phase 1 MVP)",
-        )
+        tablename = table.header_args[0] if table.header_args else ""
+        if not tablename:
+            return FixtureResult(passed=False, message="Update without table name")
+        if not table.headers:
+            return FixtureResult(passed=False, message="Update without column headers")
+
+        # Pre-classify headers; emit a clear error if the user gave SET-only or WHERE-only.
+        set_columns: list[tuple[int, str]] = []
+        where_columns: list[tuple[int, str]] = []
+        for c_i, raw in enumerate(table.headers):
+            h = raw.strip()
+            if h.endswith("="):
+                where_columns.append((c_i, h[:-1].strip()))
+            else:
+                set_columns.append((c_i, h))
+        if not set_columns:
+            return FixtureResult(
+                passed=False,
+                message="Update has no SET columns (every header ends with `=`)",
+            )
+
+        updated = 0
+        for r_i, row in enumerate(table.rows):
+            sets: list[str] = []
+            wheres: list[str] = []
+            binds: dict[str, Any] = {}
+            for c_i, col in set_columns:
+                cell = row[c_i] if c_i < len(row) else ""
+                key = f"s_{c_i}"
+                binds[key] = _cell_to_bind_value(cell, ctx)
+                sets.append(f"{col} = :{key}")
+            for c_i, col in where_columns:
+                cell = row[c_i] if c_i < len(row) else ""
+                val = _cell_to_bind_value(cell, ctx)
+                if val is None:
+                    wheres.append(f"{col} IS NULL")
+                else:
+                    key = f"w_{c_i}"
+                    binds[key] = val
+                    wheres.append(f"{col} = :{key}")
+
+            sql = f"UPDATE {tablename} SET {', '.join(sets)}"
+            if wheres:
+                sql += f" WHERE {' AND '.join(wheres)}"
+
+            try:
+                result = ctx.conn.execute(text(sql), binds)
+                updated += result.rowcount or 0
+            except DBAPIError as e:
+                err = wrap_dbapi_error(e, sql=sql, binds=binds)
+                return FixtureResult(
+                    passed=False,
+                    message=f"Update fail at row {r_i + 1}: {err}",
+                    details=_format_sql_block(sql, err),
+                )
+
+        return FixtureResult(passed=True, message=f"Update {updated} rows in {tablename}")
 
 
 @register("Insert")

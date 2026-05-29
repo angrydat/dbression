@@ -1,0 +1,2 @@
+!|DatabaseEnvironment|postgres|
+|ConnectUsingFile|connection.properties|
