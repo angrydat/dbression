@@ -28,11 +28,11 @@ dbression 0.1.0 — Suite: tests @ postgresql+psycopg://wlk:***@db01/wlk
       ✗ SchemaTest                          0.013s
 
 ══════════════════════ FAILURES ══════════════════════
-EreignisSuite/WaldbrandSuite/SchemaTest :: Query Row-Mismatch
+EventsSuite/FloodingSuite/SchemaTest :: Query Row-Mismatch
   SQL:    SELECT column_name, data_type FROM information_schema.columns WHERE ...
   Expected:  | id | integer | … |
-  Actual:    | id | integer | … | verschiebungsmessung_ja | boolean |
-                                  ^^^^^^^^^^^^^^^^^^^^^^^^
+  Actual:    | id | integer | … | catastrophic | boolean |
+                                  ^^^^^^^^^^^^
 
 ══════════════════════ SUMMARY ══════════════════════
 8 passed, 1 failed in 1.56s
@@ -144,11 +144,11 @@ select count(*) as cnt from wlk.app_selectset where oid = 999900001
 |-----|
 | 0   |
 
-### Execute Procedure pr_merkliste_add
+### Execute Procedure pr_foo_bar
 
-| p_oid     | p_table_name           |
-|-----------|------------------------|
-| 999900001 | WB_BEURTEILUNGSEINHEIT |
+| p_oid     | p_order           |
+|-----------|-------------------|
+| 999900001 | ASCENDING         |
 ````
 
 Renders in **GitHub, GitLab, Obsidian, Typora, VS Code** out of the box — tables look
