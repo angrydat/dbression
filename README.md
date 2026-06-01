@@ -15,7 +15,7 @@ anywhere. `dbression` is a Python re-implementation in the spirit of the fantast
 
 ```text
 $ dbression run tests/
-dbression 0.1.2 — Suite: tests @ postgresql+psycopg://wlk:***@db01/wlk
+dbression 0.2.0 — Suite: tests @ postgresql+psycopg://wlk:***@db01/wlk
 
 ✓ HelloSql                                  0.004s
   CommonSuite/
@@ -296,6 +296,7 @@ Postgres, Oracle and SQL Server. Honest state of the parts:
 | PostgreSQL | ✅ verified against a real-world suite     |
 | Oracle | ✅ verified against a real-world 19c suite via `oracledb` (thin) |
 | SQL Server | ✅ verified against a real-world suite via `pymssql` |
+| SQLite | ✅ via stdlib `sqlite3` — no procedures (the DB has none) |
 | JUnit XML + JSON output | ✅                                        |
 | `.test.md` native Markdown format + `dbression convert` | ✅                                        |
 | Plugin entry-points for custom fixtures | ✅                                        |

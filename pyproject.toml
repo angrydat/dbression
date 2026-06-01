@@ -1,6 +1,6 @@
 [project]
 name = "dbression"
-version = "0.1.2"
+version = "0.2.0"
 description = "Rage-quit your flaky DB regressions — modern, lightweight, multi-DB regression testing."
 readme = "README.md"
 license = { text = "MIT" }
@@ -16,6 +16,7 @@ keywords = [
     "postgres",
     "oracle",
     "sqlserver",
+    "sqlite",
     "sql",
     "markdown",
     "fitnesse",

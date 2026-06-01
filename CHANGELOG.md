@@ -7,6 +7,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-06-01
+
+### Added
+
+- **SQLite as a `DatabaseEnvironment`.** Use `DatabaseEnvironment | sqlite` (alias
+  `sqlite3`) with `service=:memory:` or `service=<path-to-db-file>` in
+  `connection.properties`. No native deps — uses the Python stdlib `sqlite3`
+  driver via SQLAlchemy. `Execute Procedure` does not apply (SQLite has no
+  stored procedures); everything else (`Query`, `Execute`, `Insert`, `Delete`,
+  `Inspect *`, `Update`, captures, substitutions) works the same as on the
+  other backends.
+
 ## [0.1.2] — 2026-06-01
 
 SQL Server live-verification release. A real-world MSSQL DBFit suite (WD-Gehsteig
@@ -120,7 +132,8 @@ with code paths in place for SQL Server and Oracle.
   reject `python-oracledb` thin-mode authentication. Configuration is via
   `DBRESSION_ORACLE_CLIENT_LIB_DIR`.
 
-[Unreleased]: https://github.com/angrydat/dbression/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/angrydat/dbression/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/angrydat/dbression/releases/tag/v0.2.0
 [0.1.2]: https://github.com/angrydat/dbression/releases/tag/v0.1.2
 [0.1.1]: https://github.com/angrydat/dbression/releases/tag/v0.1.1
 [0.1.0]: https://github.com/angrydat/dbression/releases/tag/v0.1.0
