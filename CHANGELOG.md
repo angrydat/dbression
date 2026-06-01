@@ -21,15 +21,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.1.2] — 2026-06-01
 
-SQL Server live-verification release. A real-world MSSQL DBFit suite (WD-Gehsteig
-regression tests, stored-procedure-driven, square-bracket identifiers throughout)
+SQL Server live-verification release. A real-world MSSQL DBFit suite (regression tests,
+stored-procedure-driven, square-bracket identifiers throughout)
 runs end-to-end against an MSSQL Server 2019 via `pymssql` with no changes to the
 underlying `.wiki` files.
 
 ### Fixed
 
 - **Console reporter swallowed `[…]` in failure details.** Rich's inline-markup
-  parser interpreted MSSQL square-bracket identifiers like `[wdg].PLAENE` as
+  parser interpreted MSSQL square-bracket identifiers like `[dbo].ORDER` as
   style tags and stripped them from the displayed SQL — making failure output
   misleading. Reporter now prints fixture details with `markup=False`, so the
   SQL you see is the SQL that ran.
