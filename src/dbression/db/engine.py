@@ -41,6 +41,7 @@ def _maybe_init_oracle_thick() -> None:
 _POSTGRES_ALIASES = {"postgres", "postgresql", "pg"}
 _ORACLE_ALIASES = {"oracle"}
 _MSSQL_ALIASES = {"sqlserver", "mssql", "ms-sql"}
+_SQLITE_ALIASES = {"sqlite", "sqlite3"}
 
 
 def make_engine(environment: str, config: ConnectionConfig) -> Engine:
@@ -55,6 +56,8 @@ def make_engine(environment: str, config: ConnectionConfig) -> Engine:
         url = _build_oracle_url(config, extra)
     elif env in _MSSQL_ALIASES:
         url = _build_mssql_url(config, extra)
+    elif env in _SQLITE_ALIASES:
+        url = _build_sqlite_url(config, extra)
     else:
         raise ValueError(f"Unknown DatabaseEnvironment: {environment!r}")
 
@@ -114,6 +117,30 @@ def _build_mssql_url(cfg: ConnectionConfig, extra: dict[str, str]) -> URL | str:
         port=port,
         database=extra.get("database"),
     )
+
+
+def _build_sqlite_url(cfg: ConnectionConfig, extra: dict[str, str]) -> URL | str:
+    """SQLite via the Python stdlib ``sqlite3`` driver. No native deps.
+
+    Path source order:
+
+    * ``connection-string=sqlite:///…``  — taken verbatim
+    * ``service=:memory:``               — in-memory DB
+    * ``service=<file-path>``            — file-backed DB (absolute or relative)
+    * ``database=<file-path>`` (extras)  — fallback alias
+
+    SQLite has no auth — ``username`` / ``password`` in connection.properties are
+    ignored. Stored procedures and `Execute Procedure` won't work (SQLite has none).
+    """
+    if cfg.connection_string:
+        return cfg.connection_string
+    path = cfg.service or extra.get("database") or ":memory:"
+    # SQLAlchemy SQLite URLs:
+    #   sqlite:///:memory:       — in-memory
+    #   sqlite:///relative.db    — relative to cwd (3 slashes)
+    #   sqlite:////abs/path.db   — absolute (4 slashes; the leading `/` of the path
+    #                              concatenates with the 3-slash prefix)
+    return f"sqlite:///{path}"
 
 
 def _split_host_port(service: str | None) -> tuple[str | None, int | None]:
