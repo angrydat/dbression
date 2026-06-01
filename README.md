@@ -55,7 +55,8 @@ the model gets every detail it needs to suggest a fix, no screenshots, no contex
 
 ```bash
 # install (we use uv, but pip works too)
-uv tool install git+https://github.com/angrydat/dbression.git
+uv tool install dbression          # or: pipx install dbression
+                                   # or: pip install dbression
 
 # run
 dbression run tests/
