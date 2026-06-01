@@ -91,13 +91,16 @@ def _print_page_line(page: PageResult, console: Console, verbose: bool, indent: 
 
 def _print_page_details(page: PageResult, console: Console) -> None:
     if page.error:
-        console.print(f"  [red]{page.error}[/red]")
+        console.print("  [red]", end="")
+        console.print(page.error, markup=False, highlight=False, end="")
+        console.print("[/red]")
         return
     for t in page.tables:
         if t.result.passed:
             continue
-        console.print(f"  [red]{t.name}[/red]: {t.result.message}")
+        console.print(f"  [red]{t.name}[/red]: ", end="")
+        console.print(t.result.message, markup=False, highlight=False)
         if t.result.details:
             console.print()
             for line in t.result.details.splitlines():
-                console.print(f"    {line}")
+                console.print(f"    {line}", markup=False, highlight=False)
