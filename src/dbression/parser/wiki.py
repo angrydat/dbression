@@ -13,6 +13,7 @@ from dbression.parser.tokenizer import DirectiveToken, Heading, TableRow, tokeni
 # a registered fixture appears as the first token.
 _TABLE_STARTER_FIXTURES = {
     "query",
+    "ordered query",
     "execute",
     "execute ddl",
     "execute procedure",

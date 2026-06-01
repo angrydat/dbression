@@ -2,8 +2,9 @@
 Execute Procedure (+ Expect Exception), runtime DatabaseEnvironment."""
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
 from io import StringIO
-from typing import Any
+from typing import Any, ClassVar
 
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
@@ -41,75 +42,160 @@ class Execute(Fixture):
 
 @register("Query")
 class Query(Fixture):
-    """SELECT with expected result rows.
+    """SELECT with expected result rows — **set-based (unordered) comparison**.
 
-    The second table row is the column header — column names with a ``>>name`` prefix
-    capture the value into the symbol ``name``. Following rows are expected values.
-    Comparison is exact (order, count, string representation). ``null`` is interpreted
-    as NULL/None.
+    Default behaviour matches DBFit's RowFixture: each expected row must match exactly
+    one actual row regardless of order, no surplus, no missing. Use ``Ordered Query``
+    for tests where the row order itself is the contract.
+
+    The second table row is the column header. Column-header ``?`` suffix is decorative.
+    In a data cell:
+
+    * ``>>name``  captures the matched actual row's value into symbol ``name``
+                  (capture happens on the first row whose other cells match).
+    * ``<<name``  is substituted from the symbol table before comparison.
+    * ``null`` / empty → matches SQL NULL.
+    * everything else → case-insensitive string compare with the trimmed cell text.
     """
 
+    ordered: ClassVar[bool] = False
+
     def run(self, table: Table, ctx: FixtureContext) -> FixtureResult:
-        raw_sql = table.header_args[0] if table.header_args else ""
-        if not raw_sql.strip():
-            return FixtureResult(passed=False, message="Query without SQL")
-        sql = substitute_sql_text(raw_sql, ctx.symbols)
-        binds = ctx.symbols.as_dict()
-        try:
-            result = ctx.conn.execute(text(sql), binds)
-            cols = list(result.keys())
-            rows = [tuple(r) for r in result.fetchall()]
-        except DBAPIError as e:
-            err = wrap_dbapi_error(e, sql=sql, binds=binds)
-            return FixtureResult(
-                passed=False, message=f"Query fail: {err}", details=_format_sql_block(sql, err)
-            )
+        return _run_query(table, ctx, ordered=self.ordered)
 
-        # Header handling: an empty table (only the fixture header, no data rows) means
-        # "expect an empty result". Otherwise compare headers + rows.
-        if not table.headers:
-            if rows:
-                return _row_mismatch(sql, [], [], cols, rows)
-            return FixtureResult(passed=True, message="Query OK (0 rows)")
 
-        # Normalize headers: a `?` suffix marks an "output column" in DBFit — for us a
-        # no-op, since we read all columns from the result anyway.
-        expected_headers = [h[:-1].strip() if h.endswith("?") else h.strip() for h in table.headers]
-        expected_rows = table.rows
+@register("Ordered Query")
+class OrderedQuery(Query):
+    """Like ``Query``, but compares rows in order (positional)."""
 
-        if len(rows) != len(expected_rows):
+    ordered: ClassVar[bool] = True
+
+
+def _run_query(table: Table, ctx: FixtureContext, *, ordered: bool) -> FixtureResult:
+    raw_sql = table.header_args[0] if table.header_args else ""
+    if not raw_sql.strip():
+        return FixtureResult(passed=False, message="Query without SQL")
+    sql = substitute_sql_text(raw_sql, ctx.symbols)
+    binds = ctx.symbols.as_dict()
+    try:
+        result = ctx.conn.execute(text(sql), binds)
+        cols = list(result.keys())
+        rows = [tuple(r) for r in result.fetchall()]
+    except DBAPIError as e:
+        err = wrap_dbapi_error(e, sql=sql, binds=binds)
+        return FixtureResult(
+            passed=False, message=f"Query fail: {err}", details=_format_sql_block(sql, err)
+        )
+
+    # An empty data section means "expect an empty result".
+    if not table.headers:
+        if rows:
+            return _row_mismatch(sql, [], [], cols, rows)
+        return FixtureResult(passed=True, message="Query OK (0 rows)")
+
+    # `?`-suffix on a header is decorative in DBFit; strip it.
+    expected_headers = [h[:-1].strip() if h.endswith("?") else h.strip() for h in table.headers]
+    expected_rows = table.rows
+
+    # Column lookup: case-insensitive exact match first; if not found AND the column
+    # counts agree, fall back to positional mapping (catches `select count(*)` etc.
+    # where the implicit column name like `COUNT(*)` won't equal a clean header like
+    # `count` in the wiki).
+    col_index: dict[str, int] = {c.lower(): i for i, c in enumerate(cols)}
+    for hi, h in enumerate(expected_headers):
+        if not h:
+            continue
+        if h.lower() in col_index:
+            continue
+        if len(expected_headers) == len(cols):
+            col_index[h.lower()] = hi  # positional fallback
+            continue
+        return FixtureResult(
+            passed=False,
+            message=f"Column {h!r} not in result",
+            details=f"Available columns: {cols}",
+        )
+
+    if len(rows) != len(expected_rows):
+        return _row_mismatch(sql, expected_headers, expected_rows, cols, rows)
+
+    if ordered:
+        return _compare_ordered(
+            sql, expected_headers, expected_rows, cols, rows, col_index, ctx
+        )
+    return _compare_unordered(
+        sql, expected_headers, expected_rows, cols, rows, col_index, ctx
+    )
+
+
+def _row_matches(
+    exp_row: list[str],
+    db_row: tuple,
+    expected_headers: list[str],
+    col_index: dict[str, int],
+    ctx: FixtureContext,
+) -> bool:
+    """True iff every non-capture cell in ``exp_row`` equals the corresponding DB cell.
+
+    Capture cells (``>>name``) are skipped during the match phase.
+    """
+    for c_i, exp_val in enumerate(exp_row):
+        col_name = expected_headers[c_i] if c_i < len(expected_headers) else ""
+        if not col_name:
+            continue
+        db_val = db_row[col_index[col_name.lower()]]
+        stripped = exp_val.strip()
+        if stripped.startswith(">>"):
+            continue
+        resolved = substitute_cell(stripped, ctx.symbols) if "<<" in stripped else exp_val
+        if not _cells_equal(resolved, db_val):
+            return False
+    return True
+
+
+def _apply_captures(
+    exp_row: list[str],
+    db_row: tuple,
+    expected_headers: list[str],
+    col_index: dict[str, int],
+    ctx: FixtureContext,
+) -> None:
+    for c_i, exp_val in enumerate(exp_row):
+        col_name = expected_headers[c_i] if c_i < len(expected_headers) else ""
+        if not col_name:
+            continue
+        stripped = exp_val.strip()
+        if stripped.startswith(">>"):
+            ctx.symbols.set(stripped[2:], db_row[col_index[col_name.lower()]])
+
+
+def _compare_ordered(sql, expected_headers, expected_rows, cols, rows, col_index, ctx):
+    for exp_row, db_row in zip(expected_rows, rows):
+        if not _row_matches(exp_row, db_row, expected_headers, col_index, ctx):
             return _row_mismatch(sql, expected_headers, expected_rows, cols, rows)
+        _apply_captures(exp_row, db_row, expected_headers, col_index, ctx)
+    return FixtureResult(passed=True, message=f"Query OK ({len(rows)} rows, ordered)")
 
-        # Column mapping: expected header name → index in the DB result (case-insensitive)
-        col_index: dict[str, int] = {c.lower(): i for i, c in enumerate(cols)}
 
-        # For each data row + data cell:
-        #   - Cell starts with ">>name": capture the value of this result column into
-        #     symbol `name`.
-        #   - Otherwise: literal comparison against the DB value.
-        for r_i, (exp_row, db_row) in enumerate(zip(expected_rows, rows)):
-            for c_i, exp_val in enumerate(exp_row):
-                col_name = expected_headers[c_i] if c_i < len(expected_headers) else ""
-                if not col_name:
-                    continue
-                db_idx = col_index.get(col_name.lower())
-                if db_idx is None:
-                    return FixtureResult(
-                        passed=False,
-                        message=f"Column {col_name!r} not in result",
-                        details=f"Available columns: {cols}",
-                    )
-                db_val = db_row[db_idx]
-                stripped = exp_val.strip()
-                if stripped.startswith(">>"):
-                    ctx.symbols.set(stripped[2:], db_val)
-                    continue
-                # `<<sym` in expected cells: substitute from the symbol table before compare.
-                resolved = substitute_cell(stripped, ctx.symbols) if "<<" in stripped else exp_val
-                if not _cells_equal(resolved, db_val):
-                    return _row_mismatch(sql, expected_headers, expected_rows, cols, rows)
+def _compare_unordered(sql, expected_headers, expected_rows, cols, rows, col_index, ctx):
+    """Multiset comparison: each expected row consumes one matching actual row."""
+    remaining = list(rows)
+    unmatched: list[list[str]] = []
+    for exp_row in expected_rows:
+        match_idx: int | None = None
+        for i, db_row in enumerate(remaining):
+            if _row_matches(exp_row, db_row, expected_headers, col_index, ctx):
+                match_idx = i
+                break
+        if match_idx is None:
+            unmatched.append(exp_row)
+            continue
+        _apply_captures(exp_row, remaining[match_idx], expected_headers, col_index, ctx)
+        remaining.pop(match_idx)
 
-        return FixtureResult(passed=True, message=f"Query OK ({len(rows)} rows)")
+    if not unmatched and not remaining:
+        return FixtureResult(passed=True, message=f"Query OK ({len(rows)} rows, set)")
+    return _set_mismatch(sql, expected_headers, unmatched, cols, remaining)
 
 
 @register("Set Parameter")
@@ -362,10 +448,35 @@ class ExecuteProcedure(Fixture):
 
         # No headers/rows: simple parameter-less call.
         if not table.headers:
-            return _call_proc(proc_name, [], [], ctx, expect_exception=False)
-        param_names = [h.strip().rstrip("?") for h in table.headers]
+            return _call_proc(proc_name, [], [], [], None, ctx, expect_exception=False)
+
+        # DBFit convention: a header equal to `?` is the function's return value
+        # (anonymous output). A header ending in `?` is a named output column.
+        # All other headers are input parameters.
+        input_idx: list[int] = []
+        input_names: list[str] = []
+        output_idx: list[int] = []
+        for c_i, h in enumerate(table.headers):
+            h_stripped = h.strip()
+            if not h_stripped:
+                continue
+            if h_stripped == "?" or h_stripped.endswith("?"):
+                output_idx.append(c_i)
+            else:
+                input_idx.append(c_i)
+                input_names.append(h_stripped)
+
         for r_i, row in enumerate(table.rows):
-            sub = _call_proc(proc_name, param_names, row, ctx, expect_exception=False)
+            input_values = [row[i] if i < len(row) else "" for i in input_idx]
+            expected_returns = [row[i] if i < len(row) else "" for i in output_idx]
+            sub = _call_proc(
+                proc_name,
+                input_names,
+                input_values,
+                expected_returns,
+                ctx,
+                expect_exception=False,
+            )
             if not sub.passed:
                 return FixtureResult(
                     passed=False,
@@ -393,7 +504,12 @@ class ExecuteProcedureExpectException(Fixture):
         proc_name = table.header_args[0]
         expected_code = table.header_args[1].strip() if len(table.header_args) >= 2 else ""
 
-        param_names = [h.strip().rstrip("?") for h in table.headers] if table.headers else []
+        # Filter out empty / `?`-only headers (return-value markers, which we don't compare
+        # against in expect-exception mode).
+        param_names = [
+            h.strip() for h in (table.headers or [])
+            if h.strip() and h.strip() != "?" and not h.strip().endswith("?")
+        ]
         rows = table.rows if table.rows else [[]]
 
         for r_i, row in enumerate(rows):
@@ -401,7 +517,8 @@ class ExecuteProcedureExpectException(Fixture):
                 proc_name,
                 param_names,
                 row,
-                ctx,
+                expected_returns=None,
+                ctx_obj=ctx,
                 expect_exception=True,
                 expected_code=expected_code,
             )
@@ -456,11 +573,12 @@ class _DatabaseEnvironmentRuntime(Fixture):
 
 
 def _build_proc_call_candidates(
-    name: str, param_names: list[str], dialect: str
+    name: str, param_names: list[str], dialect: str, *, prefer_select: bool = False
 ) -> list[str]:
     """Return an ordered list of call statements per dialect.
 
-    Multiple candidates only where a fallback is sensible (Postgres: SELECT/CALL).
+    If `prefer_select=True`, SELECT-shape candidates (which expose a return value) are
+    listed first — used when the caller wants to capture/compare a function's return.
     """
     if dialect == "mssql":
         if param_names:
@@ -469,9 +587,17 @@ def _build_proc_call_candidates(
         return [f"EXEC {name}"]
     if dialect == "oracle":
         if param_names:
-            args = ", ".join(f"{p} => :{p}" for p in param_names)
-            return [f"BEGIN {name}({args}); END;"]
-        return [f"BEGIN {name}; END;"]
+            args_named = ", ".join(f"{p} => :{p}" for p in param_names)
+            args_positional = ", ".join(f":{p}" for p in param_names)
+            begin = [f"BEGIN {name}({args_named}); END;"]
+            select = [
+                f"SELECT {name}({args_named}) FROM dual",
+                f"SELECT {name}({args_positional}) FROM dual",
+            ]
+        else:
+            begin = [f"BEGIN {name}; END;"]
+            select = [f"SELECT {name} FROM dual", f"SELECT {name}() FROM dual"]
+        return select + begin if prefer_select else begin + select
     # Postgres / generic: SELECT first, CALL as fallback.
     if param_names:
         args = ", ".join(f"{p} := :{p}" for p in param_names)
@@ -492,20 +618,28 @@ def _call_proc(
     name: str,
     param_names: list[str],
     row: list[str],
-    ctx: FixtureContext,
-    expect_exception: bool,
+    expected_returns: list[str] | None = None,
+    ctx_obj: FixtureContext | None = None,
+    ctx: FixtureContext | None = None,
+    expect_exception: bool = False,
     expected_code: str = "",
 ) -> FixtureResult:
+    # Argument compatibility shim: older callers pass (name, params, row, ctx, expect_exception, expected_code).
+    if ctx_obj is None and ctx is not None:
+        ctx_obj = ctx
+    assert ctx_obj is not None
+    ctx = ctx_obj
+
     binds: dict[str, Any] = {}
     for i, p in enumerate(param_names):
         binds[p] = _cell_to_bind_value(row[i], ctx) if i < len(row) else None
 
-    # Dialect-specific procedure call:
-    # * Postgres:   SELECT name(p := :p) → fallback CALL name(p := :p) for procedures
-    # * Oracle:     BEGIN name(p => :p); END;
-    # * SQL Server: EXEC name @p = :p
+    # If we expect a return value, prefer SELECT-style candidates so we can fetch it.
+    wants_return = bool(expected_returns) and not expect_exception
     dialect_name = ctx.conn.engine.dialect.name
-    candidates = _build_proc_call_candidates(name, param_names, dialect_name)
+    candidates = _build_proc_call_candidates(
+        name, param_names, dialect_name, prefer_select=wants_return
+    )
 
     last_err: Any = None
     for stmt in candidates:
@@ -514,7 +648,15 @@ def _call_proc(
         # runner's RELEASE SAVEPOINT) would fail.
         sp = ctx.conn.begin_nested()
         try:
-            ctx.conn.execute(text(stmt), binds)
+            result = ctx.conn.execute(text(stmt), binds)
+            # If the caller wants a return value, fetch it now (only SELECT-shape statements
+            # yield rows; BEGIN…END will produce nothing and we'd just see a "no result"
+            # path below).
+            returned: list[Any] | None = None
+            if wants_return and result.returns_rows:
+                fetched = result.fetchone()
+                if fetched is not None:
+                    returned = list(fetched)
         except DBAPIError as e:
             if sp.is_active:
                 sp.rollback()
@@ -522,11 +664,19 @@ def _call_proc(
             msg_lower = last_err.message.lower()
             # With multiple candidates, advance to the next variant when the error
             # signals that this routing construct wasn't the right one.
-            if (
+            #
+            # * Postgres: "is a procedure" / "use call" / "perform select"
+            # * Oracle:   PLS-00103 (PL/SQL syntax error around BEGIN…END) — happens when
+            #             the routine is a FUNCTION called as a PROCEDURE; the SELECT
+            #             alternative usually works.
+            shape_mismatch = (
                 "is a procedure" in msg_lower
                 or "use call" in msg_lower
                 or "perform select" in msg_lower
-            ):
+                or "pls-00103" in msg_lower
+                or "pls-00306" in msg_lower  # wrong number/types of args — sometimes proc vs fn
+            )
+            if shape_mismatch:
                 continue
             break
         else:
@@ -537,6 +687,29 @@ def _call_proc(
                     message="expected exception was NOT raised",
                     details=f"SQL:\n{stmt}\nBinds: {binds}",
                 )
+            # Compare the captured return value(s) against the `?`-column expectation(s).
+            if wants_return:
+                if returned is None:
+                    # SELECT-shape statement returned no row at all.
+                    return FixtureResult(
+                        passed=False,
+                        message="Expected a return value but the call yielded no row",
+                        details=f"SQL:\n{stmt}\nBinds: {binds}",
+                    )
+                # Match each expected value against the corresponding returned column.
+                for i, exp_val in enumerate(expected_returns or []):
+                    if i >= len(returned):
+                        return FixtureResult(
+                            passed=False,
+                            message=f"Expected {len(expected_returns)} return value(s), got {len(returned)}",
+                            details=f"SQL:\n{stmt}\nReturned: {returned}",
+                        )
+                    if not _cells_equal(exp_val, returned[i]):
+                        return FixtureResult(
+                            passed=False,
+                            message=f"Return mismatch: expected {exp_val!r}, got {returned[i]!r}",
+                            details=f"SQL:\n{stmt}\nBinds: {binds}\nReturned: {returned}",
+                        )
             return FixtureResult(passed=True, message=f"OK ({stmt.split('(')[0]})")
 
     if expect_exception:
@@ -575,6 +748,8 @@ def _cells_equal(expected: str, actual: Any) -> bool:
     Conventions:
     * empty cell and ``null``                → expect NULL/None
     * ``true``/``false`` (case-insensitive)  → expect a bool value
+    * numeric expected + numeric actual      → numeric (Decimal) comparison
+      (handles ``2502`` matching ``Decimal('2502')`` or ``2502.0``)
     * otherwise: string representation of the DB value, case-insensitive, trimmed,
       equals the expected string.
     """
@@ -590,6 +765,13 @@ def _cells_equal(expected: str, actual: Any) -> bool:
         if exp_lower in ("false", "f", "0"):
             return actual is False
         return False
+    # Numeric comparison: Oracle NUMBER columns often arrive as Decimal/float and
+    # str(2502.0) == "2502.0" which would never match the cell text "2502".
+    if isinstance(actual, (int, float, Decimal)):
+        try:
+            return Decimal(exp_norm) == Decimal(str(actual))
+        except (InvalidOperation, ValueError):
+            pass
     return str(actual).strip().lower() == exp_lower
 
 
@@ -616,6 +798,37 @@ def _row_mismatch(
     return FixtureResult(
         passed=False, message="Row-Mismatch", details=buf.getvalue()
     )
+
+
+def _set_mismatch(
+    sql: str,
+    expected_headers: list[str],
+    missing_rows: list[list[str]],
+    actual_cols: list[str],
+    surplus_rows: list[tuple[Any, ...]],
+) -> FixtureResult:
+    """Failure body for set-based comparison: split into Missing / Surplus blocks."""
+    buf = StringIO()
+    buf.write("SQL:\n")
+    buf.write(sql.strip() + "\n\n")
+    if missing_rows:
+        buf.write(f"Missing — expected but not found in result ({len(missing_rows)}):\n")
+        buf.write("  Columns: " + ", ".join(expected_headers) + "\n")
+        for r in missing_rows:
+            buf.write("  - | " + " | ".join(r) + " |\n")
+        buf.write("\n")
+    if surplus_rows:
+        buf.write(f"Surplus — returned by query but not expected ({len(surplus_rows)}):\n")
+        buf.write("  Columns: " + ", ".join(actual_cols) + "\n")
+        for r in surplus_rows:
+            buf.write("  + | " + " | ".join(_fmt_cell(c) for c in r) + " |\n")
+    headline = []
+    if missing_rows:
+        headline.append(f"{len(missing_rows)} missing")
+    if surplus_rows:
+        headline.append(f"{len(surplus_rows)} surplus")
+    msg = "Set-Mismatch (" + ", ".join(headline) + ")"
+    return FixtureResult(passed=False, message=msg, details=buf.getvalue())
 
 
 def _fmt_cell(v: Any) -> str:
