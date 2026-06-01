@@ -7,7 +7,7 @@ Top-level schema:
 {
   "version": "1",
   "tool": "dbression",
-  "tool_version": "0.1.0",
+  "tool_version": "<dbression-version>",
   "summary": {"tests": N, "passed": N, "failed": N, "errors": N, "duration_seconds": T},
   "suite": <suite-node>
 }

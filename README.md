@@ -11,7 +11,7 @@ anywhere. `dbression` is a Python re-implementation in the spirit of the fantast
 
 ```text
 $ dbression run tests/
-dbression 0.1.0 — Suite: tests @ postgresql+psycopg://wlk:***@db01/wlk
+dbression 0.1.2 — Suite: tests @ postgresql+psycopg://wlk:***@db01/wlk
 
 ✓ HelloSql                                  0.004s
   CommonSuite/
@@ -281,18 +281,17 @@ dbression version
 
 ## Status
 
-`dbression` is **WIP but already useful** — running production-scale DBFit suites today against
-PostgreSQL. Honest state of the parts:
+`dbression` is **WIP but already useful** — running production-scale DBFit suites today across
+Postgres, Oracle and SQL Server. Honest state of the parts:
 
 | Component | Status                                   |
 |---|------------------------------------------|
 | Wiki parser (DBFit subset) | ✅ verified                               |
-| Fixtures (Query, Execute, Insert, Delete, Set Parameter, Execute Procedure, Inspect *, Store/Compare Query) | ✅                                        |
-| PostgreSQL | ✅ verified                               |
-| SQL Server | 🟡 code-complete via `pymssql`, testing  |
-| Oracle | 🟡 code-complete via `oracledb`; testing |
+| Fixtures (Query, Execute, Insert, Delete, Set Parameter, Execute Procedure, Inspect *, Store/Compare Query, Update) | ✅                                        |
+| PostgreSQL | ✅ verified against a real-world suite     |
+| Oracle | ✅ verified against a real-world 19c suite via `oracledb` (thin) |
+| SQL Server | ✅ verified against a real-world suite via `pymssql` |
 | JUnit XML + JSON output | ✅                                        |
-| `Update` fixture | ⏳ stubbed — pull request welcome         |
 | `.test.md` native Markdown format + `dbression convert` | ✅                                        |
 | Plugin entry-points for custom fixtures | ✅                                        |
 

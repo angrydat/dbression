@@ -7,6 +7,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.2] — 2026-06-01
+
+SQL Server live-verification release. A real-world MSSQL DBFit suite (WD-Gehsteig
+regression tests, stored-procedure-driven, square-bracket identifiers throughout)
+runs end-to-end against an MSSQL Server 2019 via `pymssql` with no changes to the
+underlying `.wiki` files.
+
+### Fixed
+
+- **Console reporter swallowed `[…]` in failure details.** Rich's inline-markup
+  parser interpreted MSSQL square-bracket identifiers like `[wdg].PLAENE` as
+  style tags and stripped them from the displayed SQL — making failure output
+  misleading. Reporter now prints fixture details with `markup=False`, so the
+  SQL you see is the SQL that ran.
+
+### Changed
+
+- **`__version__` now derives from package metadata** (`importlib.metadata`).
+  One source of truth — `pyproject.toml`. Eliminates the version-drift class of
+  bug where the CLI banner kept saying `0.1.0` after releases.
+
 ## [0.1.1] — 2026-06-01
 
 First Oracle-verified release. KBGSuite, a real-world DBFit suite of network-topology
@@ -99,6 +120,7 @@ with code paths in place for SQL Server and Oracle.
   reject `python-oracledb` thin-mode authentication. Configuration is via
   `DBRESSION_ORACLE_CLIENT_LIB_DIR`.
 
-[Unreleased]: https://github.com/angrydat/dbression/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/angrydat/dbression/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/angrydat/dbression/releases/tag/v0.1.2
 [0.1.1]: https://github.com/angrydat/dbression/releases/tag/v0.1.1
 [0.1.0]: https://github.com/angrydat/dbression/releases/tag/v0.1.0
