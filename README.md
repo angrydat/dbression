@@ -15,19 +15,19 @@ anywhere. `dbression` is a Python re-implementation in the spirit of the fantast
 
 ```text
 $ dbression run tests/
-dbression 0.2.0 — Suite: tests @ postgresql+psycopg://wlk:***@db01/wlk
+dbression 0.2.0 — Suite: tests @ postgresql+psycopg://foo:***@db01/bar
 
 ✓ HelloSql                                  0.004s
   CommonSuite/
-    MerklisteSuite/
+    ChangelistSuite/
       ✓ AAddBasicTest                       0.027s
       ✓ BAddNormalizationTest               0.029s
       ✓ CAddWhitelistTest                   0.025s
       ✓ DAddInvalidArgsTest                 0.014s
       ✓ ERemTest                            0.052s
-      ✓ FViewWbTest                         1.236s
-  EreignisSuite/
-    WaldbrandSuite/
+      ✓ FViewTest                           1.236s
+  EventsSuite/
+    FireSuite/
       ✓ LookupTest                          0.157s
       ✗ SchemaTest                          0.013s
 
