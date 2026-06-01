@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/angrydat/dbression/main/docs/dbression_head.png" alt="dbression — database regression testing for schema changes, migrations, and critical queries" width="820">
+</p>
+
 # dbression
 
 > ### Rage-quit your flaky DB regressions.
