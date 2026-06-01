@@ -231,8 +231,10 @@ class Update(Fixture):
 
     Convention (DBFit-compatible):
 
-    * Headers ending in ``=`` mark **WHERE columns** (the row's value is used in the WHERE clause).
-    * All other headers are **SET columns** (assigned to the new value).
+    * Headers ending in ``=`` mark **SET columns** (assigned to the new value — the ``=``
+      reads as "set this to whatever").
+    * All other headers are **WHERE columns** (the row's value is used in the WHERE
+      clause to locate the row).
 
     Data-cell substitution: ``<<sym`` reads from the symbol table, empty / ``null`` becomes NULL.
     Each data row issues one ``UPDATE`` statement. NULL on a WHERE column generates ``IS NULL``
@@ -241,10 +243,10 @@ class Update(Fixture):
     Example::
 
         !|Update|wlk.app_selectset|
-        |selected|oid=|table_name=|
-        |true    |42  |WB         |
+        |selected=|oid|table_name|
+        |true     |42 |WB        |
 
-    runs ``UPDATE wlk.app_selectset SET selected = :v_0 WHERE oid = :v_1 AND table_name = :v_2``.
+    runs ``UPDATE wlk.app_selectset SET selected = :s_0 WHERE oid = :w_1 AND table_name = :w_2``.
     """
 
     def run(self, table: Table, ctx: FixtureContext) -> FixtureResult:
@@ -260,13 +262,13 @@ class Update(Fixture):
         for c_i, raw in enumerate(table.headers):
             h = raw.strip()
             if h.endswith("="):
-                where_columns.append((c_i, h[:-1].strip()))
+                set_columns.append((c_i, h[:-1].strip()))
             else:
-                set_columns.append((c_i, h))
+                where_columns.append((c_i, h))
         if not set_columns:
             return FixtureResult(
                 passed=False,
-                message="Update has no SET columns (every header ends with `=`)",
+                message="Update has no SET columns (no header ends with `=`)",
             )
 
         updated = 0

@@ -1,4 +1,9 @@
-"""Update fixture tests against in-memory SQLite (no DB setup needed)."""
+"""Update fixture tests against in-memory SQLite (no DB setup needed).
+
+DBFit convention recap:
+  - Header ending in `=`  → SET column ("set this to whatever")
+  - Bare header           → WHERE column (lookup criterion)
+"""
 from __future__ import annotations
 
 import pytest
@@ -40,7 +45,7 @@ def test_update_set_one_column_where_id(conn) -> None:
     res, _ = _run_update(
         conn,
         args=["kunde"],
-        headers=["ort", "id="],
+        headers=["ort=", "id"],  # SET ort, WHERE id
         rows=[["Salzburg", "1"]],
     )
     assert res.passed, res.message
@@ -53,7 +58,7 @@ def test_update_multi_set_multi_where(conn) -> None:
     res, _ = _run_update(
         conn,
         args=["kunde"],
-        headers=["name", "ort", "id="],
+        headers=["name=", "ort=", "id"],
         rows=[["BobNeu", "Graz", "2"]],
     )
     assert res.passed
@@ -65,7 +70,7 @@ def test_update_multiple_rows_each_with_own_where(conn) -> None:
     res, _ = _run_update(
         conn,
         args=["kunde"],
-        headers=["ort", "id="],
+        headers=["ort=", "id"],
         rows=[["Graz", "1"], ["Innsbruck", "3"]],
     )
     assert res.passed
@@ -82,7 +87,7 @@ def test_update_with_symbol_substitution(conn) -> None:
     tbl = Table(
         name="Update",
         header_args=["kunde"],
-        headers=["ort", "id="],
+        headers=["ort=", "id"],
         rows=[["<<new_ort", "<<target_id"]],
     )
     res = cls().run(tbl, ctx)
@@ -97,7 +102,7 @@ def test_update_null_in_where_uses_is_null(conn) -> None:
     res, _ = _run_update(
         conn,
         args=["kunde"],
-        headers=["name", "ort="],
+        headers=["name=", "ort"],
         rows=[["Found", "null"]],
     )
     assert res.passed
@@ -109,7 +114,7 @@ def test_update_no_set_columns_fails_gracefully(conn) -> None:
     res, _ = _run_update(
         conn,
         args=["kunde"],
-        headers=["id=", "name="],
+        headers=["id", "name"],  # no `=` anywhere → no SET columns
         rows=[["1", "Anna"]],
     )
     assert not res.passed
@@ -117,6 +122,6 @@ def test_update_no_set_columns_fails_gracefully(conn) -> None:
 
 
 def test_update_without_table_name_fails(conn) -> None:
-    res, _ = _run_update(conn, args=[], headers=["x"], rows=[["1"]])
+    res, _ = _run_update(conn, args=[], headers=["x="], rows=[["1"]])
     assert not res.passed
     assert "table name" in res.message
