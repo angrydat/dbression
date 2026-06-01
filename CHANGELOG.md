@@ -7,6 +7,44 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-06-01
+
+First Oracle-verified release. KBGSuite, a real-world DBFit suite of network-topology
+tests against an Oracle 19c instance, runs end-to-end (6/6 pages green) via dbression
+with no changes to the underlying `.wiki` files.
+
+### Added
+
+- **`Ordered Query`** fixture for tests where row order is part of the contract.
+  Default `Query` is now unordered (set-based) — see *Changed* below.
+- **Function return values in `Execute Procedure`**: a `?` column header (DBFit
+  convention) is now captured from the call result and compared against the
+  corresponding cell. Works for Oracle SQL functions called via `SELECT … FROM dual`.
+
+### Changed
+
+- **`Query` is now set-based (multiset) by default**, matching DBFit's `RowFixture`
+  semantics: expected rows must match actual rows regardless of order, with no
+  surplus and nothing missing. Tests previously written for the strict positional
+  comparison should still pass (a multiset matches if the list matches); tests that
+  used a hand-curated row order without an `ORDER BY` will now pass where they
+  previously failed.
+- **Numeric cell comparison** uses `Decimal` instead of string equality. Oracle
+  `NUMBER` columns arrive as `Decimal('2502.0')` and now match the wiki cell `"2502"`.
+- **Oracle stored-routine calls** transparently try `BEGIN … END;`, `SELECT … FROM dual`
+  and positional variants in order. Errors with PLS-00103 / PLS-00306 (which usually
+  indicate "this is a FUNCTION, not a PROCEDURE") trigger the next candidate.
+- **Column-name lookup in result sets** falls back to positional mapping when the
+  expected header count equals the actual column count. Covers idioms like
+  `select count(*)` where the implicit column name is `COUNT(*)`.
+
+### Fixed
+
+- **`Update` fixture semantics**: the `=` suffix on a column header marks a **SET**
+  column (previously WHERE), bare headers mark **WHERE** columns (previously SET).
+  This is the DBFit convention; v0.1.0 had it inverted. If you wrote any `Update`
+  fixtures against v0.1.0, swap the `=` markers across.
+
 ## [0.1.0] — 2026-05-29
 
 Initial public release. Functional core that runs real-world DBFit suites against PostgreSQL,
@@ -61,5 +99,6 @@ with code paths in place for SQL Server and Oracle.
   reject `python-oracledb` thin-mode authentication. Configuration is via
   `DBRESSION_ORACLE_CLIENT_LIB_DIR`.
 
-[Unreleased]: https://github.com/angrydat/dbression/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/angrydat/dbression/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/angrydat/dbression/releases/tag/v0.1.1
 [0.1.0]: https://github.com/angrydat/dbression/releases/tag/v0.1.0

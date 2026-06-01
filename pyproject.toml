@@ -1,6 +1,6 @@
 [project]
 name = "dbression"
-version = "0.1.0"
+version = "0.1.1"
 description = "Rage-quit your flaky DB regressions — modern, lightweight, multi-DB regression testing."
 readme = "README.md"
 license = { text = "MIT" }
