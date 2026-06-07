@@ -18,6 +18,23 @@ from dbression.symbols import SymbolTable
 CommitMode = Literal["test", "page"]
 
 
+class RunObserver:
+    """Hook for live run feedback. Default methods are no-ops — subclass to react.
+
+    The runner calls ``on_fixture_start`` immediately before a fixture table is evaluated
+    and ``on_fixture_end`` once its result is known, for every fixture that actually runs
+    (suite directives like ``DatabaseEnvironment`` are skipped, matching ``count_fixtures``).
+    """
+
+    def on_fixture_start(self, page_name: str, table: Table) -> None:  # noqa: D401
+        ...
+
+    def on_fixture_end(
+        self, page_name: str, table: Table, result: FixtureResult, duration: float
+    ) -> None:
+        ...
+
+
 @dataclass(slots=True)
 class TableResult:
     name: str
@@ -68,6 +85,31 @@ _SUITE_DIRECTIVE_FIXTURES = {"databaseenvironment", "connectusingfile", "import 
 def _is_suite_directive(table: Table) -> bool:
     norm = " ".join(table.name.strip().lower().split())
     return norm in _SUITE_DIRECTIVE_FIXTURES
+
+
+def _count_page_fixtures(page: Page | None) -> int:
+    if page is None:
+        return 0
+    return sum(1 for t in page.tables if not _is_suite_directive(t))
+
+
+def count_fixtures(suite: Suite, tag_filter: "TagFilter | None" = None) -> int:
+    """Count the fixtures that will actually run — for an ``x/y`` progress total.
+
+    Mirrors what ``_run_page_in_tx`` executes: SuiteSetUp + tag-allowed test pages +
+    SuiteTearDown, recursively through sub-suites, skipping suite-directive tables.
+    May slightly overcount when a page or setup fails early (remaining fixtures are then
+    skipped) — that only means the bar stops short of 100%, which is itself informative.
+    """
+    n = _count_page_fixtures(suite.setup)
+    for page in suite.pages:
+        if tag_filter is not None and not tag_filter.page_allowed(page):
+            continue
+        n += _count_page_fixtures(page)
+    n += _count_page_fixtures(suite.teardown)
+    for sub in suite.subsuites:
+        n += count_fixtures(sub, tag_filter)
+    return n
 
 
 def _scan_engine_config(page: Page | None) -> tuple[str | None, str | None]:
@@ -164,6 +206,7 @@ def run_suite(
     symbols: SymbolTable | None = None,
     tag_filter: TagFilter | None = None,
     stored: dict[str, StoredQuery] | None = None,
+    observer: RunObserver | None = None,
 ) -> SuiteResult:
     """Run a suite recursively (including sub-suites).
 
@@ -186,7 +229,7 @@ def run_suite(
                 # SuiteSetUp — runs inside the suite TX, no commit/rollback of its own.
                 if suite.setup is not None:
                     result.setup_result = _run_page_in_tx(
-                        suite.setup, conn, symbols, stored, isolate=False
+                        suite.setup, conn, symbols, stored, isolate=False, observer=observer
                     )
                     if not result.setup_result.passed:
                         result.error = f"SuiteSetUp failed: {result.setup_result.name}"
@@ -197,13 +240,15 @@ def run_suite(
                     if tag_filter is not None and not tag_filter.page_allowed(page):
                         continue
                     isolate = commit_mode == "test"
-                    pr = _run_page_in_tx(page, conn, symbols, stored, isolate=isolate)
+                    pr = _run_page_in_tx(
+                        page, conn, symbols, stored, isolate=isolate, observer=observer
+                    )
                     result.pages.append(pr)
 
                 # Sub-suites: recursive, with their own engine if directives differ.
                 for sub in suite.subsuites:
                     sub_res = _run_subsuite(
-                        sub, engine, conn, commit_mode, symbols, tag_filter, stored
+                        sub, engine, conn, commit_mode, symbols, tag_filter, stored, observer
                     )
                     result.subsuites.append(sub_res)
 
@@ -212,7 +257,7 @@ def run_suite(
                 # connection stays valid.
                 if suite.teardown is not None:
                     result.teardown_result = _run_page_in_tx(
-                        suite.teardown, conn, symbols, stored, isolate=False
+                        suite.teardown, conn, symbols, stored, isolate=False, observer=observer
                     )
             finally:
                 # Defensive rollback of the entire suite TX. If TearDown already rolled
@@ -233,6 +278,7 @@ def _run_subsuite(
     symbols: SymbolTable,
     tag_filter: TagFilter | None = None,
     stored: dict[str, StoredQuery] | None = None,
+    observer: RunObserver | None = None,
 ) -> SuiteResult:
     """Run a sub-suite. If it has its own engine directives, use a local engine; otherwise
     run on the parent engine (with its own connection, for clean TX isolation).
@@ -251,11 +297,13 @@ def _run_subsuite(
         except Exception as e:
             return SuiteResult(name=sub.name, error=f"Engine build: {type(e).__name__}: {e}")
         try:
-            return run_suite(sub, sub_engine, commit_mode, symbols, tag_filter, stored)
+            return run_suite(
+                sub, sub_engine, commit_mode, symbols, tag_filter, stored, observer
+            )
         finally:
             sub_engine.dispose()
 
-    return run_suite(sub, parent_engine, commit_mode, symbols, tag_filter, stored)
+    return run_suite(sub, parent_engine, commit_mode, symbols, tag_filter, stored, observer)
 
 
 def _run_page_in_tx(
@@ -264,6 +312,7 @@ def _run_page_in_tx(
     symbols: SymbolTable,
     stored: dict[str, StoredQuery],
     isolate: bool,
+    observer: RunObserver | None = None,
 ) -> PageResult:
     """Run all fixture tables of a page inside the existing suite TX.
 
@@ -278,6 +327,8 @@ def _run_page_in_tx(
         for table in page.tables:
             if _is_suite_directive(table):
                 continue
+            if observer is not None:
+                observer.on_fixture_start(page.name, table)
             start = time.perf_counter()
             fixture_cls = resolve_fixture(table.name)
             if fixture_cls is None:
@@ -294,9 +345,10 @@ def _run_page_in_tx(
                         message=f"Fixture crash: {type(e).__name__}",
                         details=str(e),
                     )
-            pr.tables.append(
-                TableResult(name=table.name, result=res, duration=time.perf_counter() - start)
-            )
+            duration = time.perf_counter() - start
+            pr.tables.append(TableResult(name=table.name, result=res, duration=duration))
+            if observer is not None:
+                observer.on_fixture_end(page.name, table, res, duration)
             if not res.passed:
                 if savepoint is not None and savepoint.is_active:
                     savepoint.rollback()

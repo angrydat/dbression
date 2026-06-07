@@ -5,7 +5,24 @@ All notable changes to `dbression` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Released]
+## [Unreleased]
+
+## [0.3.0] — 2026-06-08
+
+### Added
+
+- **Single-file runs.** `dbression run path/to/MyTest.test.md` (or `.wiki`) now runs a
+  single test, mirroring DBFit: a file is one *Test* (many fixtures), a directory is a
+  *Suite*. The containing directory's `SuiteSetUp` / `SuiteTearDown` and `_root`
+  (connection + `DatabaseEnvironment`) are included automatically. A self-contained
+  `.test.md` carrying its own `<!-- dbression:env=… -->` / `<!-- dbression:connection=… -->`
+  directives runs standalone.
+- **Live progress.** Runs now show a spinner, an `x/y fixtures` counter, elapsed time, and
+  a status line naming the fixture/query currently executing. On by default at a TTY;
+  silenced automatically when output is piped or in CI. Toggle with `--progress` /
+  `--no-progress`.
+- **`--details` / `-d`.** Prints each fixture's result green/red as it runs (DBFit-web-UI
+  style), so a `.test.md` viewed in `glow` has a matching colored CLI run alongside it.
 
 ## [0.2.0] — 2026-06-01
 
@@ -132,7 +149,8 @@ with code paths in place for SQL Server and Oracle.
   reject `python-oracledb` thin-mode authentication. Configuration is via
   `DBRESSION_ORACLE_CLIENT_LIB_DIR`.
 
-[Unreleased]: https://github.com/angrydat/dbression/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/angrydat/dbression/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/angrydat/dbression/releases/tag/v0.3.0
 [0.2.0]: https://github.com/angrydat/dbression/releases/tag/v0.2.0
 [0.1.2]: https://github.com/angrydat/dbression/releases/tag/v0.1.2
 [0.1.1]: https://github.com/angrydat/dbression/releases/tag/v0.1.1

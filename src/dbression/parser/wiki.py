@@ -203,3 +203,66 @@ def parse_suite(root: Path) -> Suite:
     # Stable, deterministic order of test pages (alphabetical).
     suite.pages.sort(key=lambda p: p.name)
     return suite
+
+
+def _discover_special_pages(root: Path) -> dict[str, Page]:
+    """Parse only ``_root`` / ``SuiteSetUp`` / ``SuiteTearDown`` in `root` (md > wiki).
+
+    Used by single-file runs to pull in the surrounding directory's connection config
+    and setup/teardown without dragging in sibling test pages.
+    """
+    from dbression.parser.markdown import MARKDOWN_TEST_SUFFIX, parse_markdown
+
+    wanted = {"_root", "SuiteSetUp", "SuiteTearDown"}
+    if not root.is_dir():
+        return {}
+    found: dict[str, tuple[Path, str]] = {}
+    for entry in sorted(root.iterdir()):
+        if entry.is_dir():
+            continue
+        if entry.name.endswith(MARKDOWN_TEST_SUFFIX):
+            pn = entry.name[: -len(MARKDOWN_TEST_SUFFIX)]
+            if pn in wanted:
+                found[pn] = (entry, "md")
+        elif entry.suffix == ".wiki":
+            pn = entry.stem
+            if pn in wanted:
+                found.setdefault(pn, (entry, "wiki"))
+    out: dict[str, Page] = {}
+    for pn, (p, fmt) in found.items():
+        out[pn] = parse_markdown(p) if fmt == "md" else parse_wiki(p)
+    return out
+
+
+def parse_test_file(path: Path) -> Suite:
+    """Parse a single test FILE (``.test.md`` or ``.wiki``) into a runnable one-page Suite.
+
+    DBFit semantics: a file is one **Test** (many fixtures/assertions); a directory is a
+    **Suite**. When a single test is run, the surrounding directory's ``SuiteSetUp`` /
+    ``SuiteTearDown`` and ``_root`` (``DatabaseEnvironment`` + ``ConnectUsingFile``) are
+    included — just like opening a single page in the DBFit web UI runs its SuiteSetUp.
+
+    A self-contained ``.test.md`` that carries its own ``<!-- dbression:env=… -->`` /
+    ``<!-- dbression:connection=… -->`` directives runs standalone: those become the
+    suite's engine config (resolved relative to the file's directory).
+    """
+    from dbression.parser.markdown import MARKDOWN_TEST_SUFFIX, parse_markdown
+
+    if not path.is_file():
+        raise ValueError(f"Not a file: {path}")
+    if path.name.endswith(MARKDOWN_TEST_SUFFIX):
+        page = parse_markdown(path)
+    elif path.suffix == ".wiki":
+        page = parse_wiki(path)
+    else:
+        raise ValueError(f"Not a runnable test file (expected .test.md or .wiki): {path}")
+
+    root = path.parent
+    suite = Suite(root=root, name=page.name, pages=[page])
+    specials = _discover_special_pages(root)
+    suite.setup = specials.get("SuiteSetUp")
+    suite.teardown = specials.get("SuiteTearDown")
+    # Engine config precedence: a real `_root` in the directory wins; otherwise the test
+    # file's own env/connection directives make it self-contained.
+    suite.root_page = specials.get("_root") or page
+    return suite

@@ -15,7 +15,7 @@ anywhere. `dbression` is a Python re-implementation in the spirit of the fantast
 
 ```text
 $ dbression run tests/
-dbression 0.2.0 — Suite: tests @ postgresql+psycopg://foo:***@db01/bar
+dbression 0.3.0 — Suite: tests @ postgresql+psycopg://foo:***@db01/bar
 
 ✓ HelloSql                                  0.004s
   CommonSuite/
@@ -240,7 +240,10 @@ dbression:
 ## CLI cheat sheet
 
 ```bash
-dbression run <suite-path>                   # run an entire (sub-)suite
+dbression run <suite-path>                   # run an entire (sub-)suite (a directory)
+dbression run <path>/MyTest.test.md          # run a single test file (its SuiteSetUp/_root come along)
+dbression run <path> -d                      # --details: print each fixture green/red as it runs
+dbression run <path> --no-progress           # disable the live spinner / x-of-y counter
 dbression run <path> -v                      # show every fixture table, not just the page line
 dbression run <path> --tag critical          # only run pages tagged `critical`
 dbression run <path> --skip-tag NotOnCI      # skip pages tagged `NotOnCI`
@@ -251,6 +254,10 @@ dbression convert path/to/wiki/              # converts .wiki → .test.md (in-p
 dbression convert file.wiki -o out.test.md   # single file with explicit output path
 dbression version
 ```
+
+A run shows a live spinner with an `x/y fixtures` counter and the currently-executing
+query (auto-disabled when piped or in CI). Add `-d`/`--details` to stream a colored
+pass/fail line per fixture — handy next to a `.test.md` you're previewing in `glow`.
 
 ## Status
 

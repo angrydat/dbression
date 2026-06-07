@@ -8,11 +8,17 @@ import typer
 from rich.console import Console
 
 from dbression import __version__
-from dbression.parser import parse_suite
+from dbression.parser import parse_suite, parse_test_file
 from dbression.parser.markdown_writer import page_to_markdown
 from dbression.parser.wiki import parse_wiki
-from dbression.report import print_suite_result, write_json_report, write_junit_xml
-from dbression.runner import TagFilter, build_engine_for_suite, run_suite
+from dbression.report import (
+    ProgressObserver,
+    make_progress,
+    print_suite_result,
+    write_json_report,
+    write_junit_xml,
+)
+from dbression.runner import TagFilter, build_engine_for_suite, count_fixtures, run_suite
 
 app = typer.Typer(
     name="dbression",
@@ -37,7 +43,12 @@ def version() -> None:
 
 @app.command()
 def run(
-    path: Annotated[Path, typer.Argument(help="Path to the suite (directory containing _root.wiki)")],
+    path: Annotated[
+        Path,
+        typer.Argument(
+            help="A suite directory (with _root.wiki) OR a single test file (.test.md / .wiki)"
+        ),
+    ],
     commit_mode: Annotated[
         str,
         typer.Option(
@@ -48,6 +59,21 @@ def run(
     verbose: Annotated[
         bool, typer.Option("-v", "--verbose", help="Print every fixture table, not just the page line")
     ] = False,
+    details: Annotated[
+        bool,
+        typer.Option(
+            "-d",
+            "--details",
+            help="Print each fixture's result (green/red) live as it runs, DBFit-web-UI style",
+        ),
+    ] = False,
+    progress: Annotated[
+        bool | None,
+        typer.Option(
+            "--progress/--no-progress",
+            help="Live spinner + x/y fixture counter (default: on when stdout is a terminal)",
+        ),
+    ] = None,
     tag: Annotated[
         list[str] | None,
         typer.Option(
@@ -68,10 +94,7 @@ def run(
         typer.Option("--json", help="Write a JSON report to this path (LLM / tooling)"),
     ] = None,
 ) -> None:
-    """Run a dbression suite and produce pytest-style reporting."""
-    if not path.is_dir():
-        console.print(f"[red]Not a directory:[/red] {path}")
-        raise typer.Exit(2)
+    """Run a dbression test (single file) or suite (directory) with live progress."""
     if commit_mode not in ("test", "page"):
         console.print(
             f"[red]Invalid commit-mode: {commit_mode!r} (allowed: test, page)[/red]"
@@ -80,14 +103,52 @@ def run(
 
     tag_filter = TagFilter(only=tuple(tag or ()), skip=tuple(skip_tag or ()))
 
-    suite = parse_suite(path)
+    if path.is_dir():
+        suite = parse_suite(path)
+        kind = "Suite"
+    elif path.is_file():
+        try:
+            suite = parse_test_file(path)
+        except ValueError as e:
+            console.print(f"[red]{e}[/red]")
+            raise typer.Exit(2)
+        kind = "Test"
+    else:
+        console.print(f"[red]Path does not exist:[/red] {path}")
+        raise typer.Exit(2)
+
     engine = build_engine_for_suite(suite)
     console.print(
-        f"dbression {__version__} — Suite: [bold]{suite.name}[/bold] @ "
+        f"dbression {__version__} — {kind}: [bold]{suite.name}[/bold] @ "
         f"{engine.url.render_as_string(hide_password=True)}\n"
     )
+
+    # Progress is on by default at a TTY; --progress / --no-progress override.
+    use_progress = console.is_terminal if progress is None else progress
+    total = count_fixtures(suite, tag_filter)
+
     try:
-        result = run_suite(suite, engine, commit_mode=commit_mode, tag_filter=tag_filter)  # type: ignore[arg-type]
+        if use_progress:
+            with make_progress(console) as prog:
+                task = prog.add_task("starting…", total=total or None)
+                observer = ProgressObserver(console, prog, task, details=details)
+                result = run_suite(
+                    suite,
+                    engine,
+                    commit_mode=commit_mode,  # type: ignore[arg-type]
+                    tag_filter=tag_filter,
+                    observer=observer,
+                )
+        else:
+            # No live bar (piped / CI). Still stream colored detail lines if asked.
+            observer = ProgressObserver(console, details=details) if details else None
+            result = run_suite(
+                suite,
+                engine,
+                commit_mode=commit_mode,  # type: ignore[arg-type]
+                tag_filter=tag_filter,
+                observer=observer,
+            )
     finally:
         engine.dispose()
     print_suite_result(result, console, verbose=verbose)
