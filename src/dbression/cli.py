@@ -47,7 +47,8 @@ def run(
     path: Annotated[
         Path,
         typer.Argument(
-            help="A suite directory (with _root.wiki) OR a single test file (.test.md / .wiki)"
+            help="A suite directory (with a _root.wiki or _root.test.md) "
+            "OR a single test file (.test.md / .wiki)"
         ),
     ],
     commit_mode: Annotated[
