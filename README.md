@@ -15,7 +15,7 @@ anywhere. `dbression` is a Python re-implementation in the spirit of the fantast
 
 ```text
 $ dbression run tests/
-dbression 0.3.0 — Suite: tests @ postgresql+psycopg://foo:***@db01/bar
+dbression 0.3.1 — Suite: tests @ postgresql+psycopg://foo:***@db01/bar
 
 ✓ HelloSql                                  0.004s
   CommonSuite/
@@ -242,6 +242,7 @@ dbression:
 ```bash
 dbression run <suite-path>                   # run an entire (sub-)suite (a directory)
 dbression run <path>/MyTest.test.md          # run a single test file (its SuiteSetUp/_root come along)
+dbression run <path>/MyTest.test.md -r       # --render: live DBFit-style page, cards light up green/red
 dbression run <path> -d                      # --details: print each fixture green/red as it runs
 dbression run <path> --no-progress           # disable the live spinner / x-of-y counter
 dbression run <path> -v                      # show every fixture table, not just the page line
@@ -258,6 +259,11 @@ dbression version
 A run shows a live spinner with an `x/y fixtures` counter and the currently-executing
 query (auto-disabled when piped or in CI). Add `-d`/`--details` to stream a colored
 pass/fail line per fixture — handy next to a `.test.md` you're previewing in `glow`.
+
+For a single `.test.md`, `-r`/`--render` goes further: it renders the whole page in the
+terminal (prose, SQL, expected tables) and lights each fixture card up green or red **in
+place** as it runs — the terminal answer to watching a DBFit wiki page execute in the
+browser. You see exactly where a page breaks, in document context.
 
 ## Status
 

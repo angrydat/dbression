@@ -9,11 +9,13 @@ from dbression.report.console import print_suite_result
 from dbression.report.json_report import write_json_report
 from dbression.report.junit import write_junit_xml
 from dbression.report.progress import ProgressObserver, make_progress
+from dbression.report.render import render_run
 
 __all__ = [
     "ProgressObserver",
     "make_progress",
     "print_suite_result",
+    "render_run",
     "write_json_report",
     "write_junit_xml",
 ]

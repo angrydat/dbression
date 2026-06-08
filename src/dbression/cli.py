@@ -15,6 +15,7 @@ from dbression.report import (
     ProgressObserver,
     make_progress,
     print_suite_result,
+    render_run,
     write_json_report,
     write_junit_xml,
 )
@@ -67,6 +68,15 @@ def run(
             help="Print each fixture's result (green/red) live as it runs, DBFit-web-UI style",
         ),
     ] = False,
+    render: Annotated[
+        bool,
+        typer.Option(
+            "-r",
+            "--render",
+            help="Render a single .test.md page in the terminal, cards lighting up green/red "
+            "in place as fixtures run (DBFit-browser style). Single .test.md file only.",
+        ),
+    ] = False,
     progress: Annotated[
         bool | None,
         typer.Option(
@@ -103,6 +113,13 @@ def run(
 
     tag_filter = TagFilter(only=tuple(tag or ()), skip=tuple(skip_tag or ()))
 
+    if render and not (path.is_file() and path.name.endswith(".test.md")):
+        console.print(
+            "[red]--render works on a single .test.md file[/red] "
+            "(it renders one page as a live document)."
+        )
+        raise typer.Exit(2)
+
     if path.is_dir():
         suite = parse_suite(path)
         kind = "Suite"
@@ -128,7 +145,17 @@ def run(
     total = count_fixtures(suite, tag_filter)
 
     try:
-        if use_progress:
+        if render:
+            # Live DBFit-style page render — the document IS the output.
+            result = render_run(
+                console,
+                suite,
+                engine,
+                source=path.read_text(encoding="utf-8"),
+                commit_mode=commit_mode,  # type: ignore[arg-type]
+                tag_filter=tag_filter,
+            )
+        elif use_progress:
             with make_progress(console) as prog:
                 task = prog.add_task("starting…", total=total or None)
                 observer = ProgressObserver(console, prog, task, details=details)
@@ -151,7 +178,8 @@ def run(
             )
     finally:
         engine.dispose()
-    print_suite_result(result, console, verbose=verbose)
+    if not render:
+        print_suite_result(result, console, verbose=verbose)
 
     if junit_xml is not None:
         write_junit_xml(result, junit_xml)

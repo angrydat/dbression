@@ -7,6 +7,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-06-08
+
+### Added
+
+- **`--render` / `-r` — live page rendering (DBFit-browser style).** For a single
+  `.test.md`, the page is rendered in the terminal (prose, syntax-highlighted SQL,
+  expected tables) and each fixture card lights up green/red *in place* as it runs, with
+  the row diff shown inline on failure. The closest terminal analogue to watching a DBFit
+  wiki page execute in the browser.
+
 ## [0.3.0] — 2026-06-08
 
 ### Added
@@ -149,7 +159,8 @@ with code paths in place for SQL Server and Oracle.
   reject `python-oracledb` thin-mode authentication. Configuration is via
   `DBRESSION_ORACLE_CLIENT_LIB_DIR`.
 
-[Unreleased]: https://github.com/angrydat/dbression/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/angrydat/dbression/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/angrydat/dbression/releases/tag/v0.3.1
 [0.3.0]: https://github.com/angrydat/dbression/releases/tag/v0.3.0
 [0.2.0]: https://github.com/angrydat/dbression/releases/tag/v0.2.0
 [0.1.2]: https://github.com/angrydat/dbression/releases/tag/v0.1.2
